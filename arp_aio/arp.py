@@ -23,22 +23,6 @@ log = logging.getLogger('main')
 
 
 @asyncio.coroutine
-def _create_raw_connection_transport(self, sock, protocol_factory):
-    sock.setblocking(False)
-    protocol = protocol_factory()
-    waiter = asyncio.Future(loop=self)
-    transport = self._make_socket_transport(sock, protocol, waiter)
-
-    try:
-        yield from waiter
-    except:
-        transport.close()
-        raise
-
-    return transport, protocol
-
-
-@asyncio.coroutine
 def create_raw_connection(self, protocol_factory, interface=None, *,
                           family=None, proto=0, sock=None):
     if interface is not None:
@@ -86,13 +70,12 @@ def create_raw_connection(self, protocol_factory, interface=None, *,
         raise ValueError(
             'interface was not set and no sock specified')
 
-    transport, protocol = yield from self._create_raw_connection_transport(
-        sock, protocol_factory)
+    transport, protocol = yield from self._create_connection_transport(
+        sock, protocol_factory, ssl=None, server_hostname=None)
 
     return transport, protocol
 
 
-setattr(asyncio.base_events.BaseEventLoop, '_create_raw_connection_transport', _create_raw_connection_transport)
 setattr(asyncio.base_events.BaseEventLoop, 'create_raw_connection', create_raw_connection)
 
 
