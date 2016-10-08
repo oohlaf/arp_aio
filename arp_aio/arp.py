@@ -34,7 +34,7 @@ def create_raw_connection(protocol_factory, loop,
     if family == 0:
         family = socket.AF_PACKET
     if proto != 0:
-        proto = socket.ntoh(proto)
+        proto = socket.htons(proto)
 
     exceptions = []
     try:
