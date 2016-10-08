@@ -23,60 +23,56 @@ log = logging.getLogger('main')
 
 
 @asyncio.coroutine
-def create_raw_connection(self, protocol_factory, interface=None, *,
-                          family=None, proto=0, sock=None):
-    if interface is not None:
-        interface = interface[:15]
-        if sock is not None:
-            raise ValueError(
-                'device and sock can not be specified at the same time')
-
-        if family is None:
-            family = socket.AF_PACKET
-
-        exceptions = []
-        try:
-            sock = socket.socket(family=family,
-                                 type=socket.SOCK_RAW,
-                                 proto=proto)
-            sock.setblocking(False)
-            try:
-                sock.bind((interface, socket.SOCK_RAW))
-                self._interface = interface
-            except OSError as exc:
-                exc = OSError(
-                        exc.errno, 'error while attempting to bind on '
-                        'interface {!r}: {}'.format(
-                            interface, exc.strerror.lower()))
-                exceptions.append(exc)
-        except OSError as exc:
-            if sock is not None:
-                sock.close()
-            exceptions.append(exc)
-        except:
-            if sock is not None:
-                sock.close()
-            raise
-
-        if len(exceptions) == 1:
-            raise exceptions[0]
-        elif len(exceptions) > 1:
-            model = str(exceptions[0])
-            if all(str(exc) == model for exc in exceptions):
-                raise exceptions[0]
-            raise OSError('Multiple exceptions: {}'.format(
-                ', '.join(str(exc) for exc in exceptions)))
-    elif sock is None:
+def create_raw_connection(protocol_factory, loop,
+                          interface=None, family=0, proto=0):
+    if interface is None:
         raise ValueError(
-            'interface was not set and no sock specified')
+            'interface was not set')
+    else:
+        interface = interface[:15]
 
-    transport, protocol = yield from self._create_connection_transport(
+    if family == 0:
+        family = socket.AF_PACKET
+    if proto != 0:
+        proto = socket.ntoh(proto)
+
+    exceptions = []
+    try:
+        sock = socket.socket(family=family,
+                             type=socket.SOCK_RAW,
+                             proto=proto)
+        sock.setblocking(False)
+        try:
+            sock.bind((interface, socket.SOCK_RAW))
+            loop._interface = interface
+        except OSError as exc:
+            exc = OSError(
+                    exc.errno, 'error while attempting to bind on '
+                    'interface {!r}: {}'.format(
+                        interface, exc.strerror.lower()))
+            exceptions.append(exc)
+    except OSError as exc:
+        if sock is not None:
+            sock.close()
+        exceptions.append(exc)
+    except:
+        if sock is not None:
+            sock.close()
+        raise
+
+    if len(exceptions) == 1:
+        raise exceptions[0]
+    elif len(exceptions) > 1:
+        model = str(exceptions[0])
+        if all(str(exc) == model for exc in exceptions):
+            raise exceptions[0]
+        raise OSError('Multiple exceptions: {}'.format(
+            ', '.join(str(exc) for exc in exceptions)))
+
+    transport, protocol = yield from loop._create_connection_transport(
         sock, protocol_factory, ssl=None, server_hostname=None)
 
     return transport, protocol
-
-
-setattr(asyncio.base_events.BaseEventLoop, 'create_raw_connection', create_raw_connection)
 
 
 SIOCGIFADDR = 0x8915
@@ -161,8 +157,9 @@ class ARPRequestProtocol(asyncio.Protocol):
 
 def main():
     event_loop = asyncio.get_event_loop()
-    coro = event_loop.create_raw_connection(
+    coro = create_raw_connection(
         lambda: ARPRequestProtocol(ip='192.168.1.64', loop=event_loop),
+        loop=event_loop,
         interface='eth0')
     server_transport, server_proto = event_loop.run_until_complete(coro)
     try:
