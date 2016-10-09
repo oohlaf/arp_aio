@@ -44,7 +44,6 @@ def create_raw_connection(protocol_factory, loop,
         sock.setblocking(False)
         try:
             sock.bind((interface, socket.SOCK_RAW))
-            loop._interface = interface
         except OSError as exc:
             exc = OSError(
                     exc.errno, 'error while attempting to bind on '
@@ -81,9 +80,8 @@ SIOCSIFHWADDR = 0x8927
 
 class ARPRequestProtocol(asyncio.Protocol):
 
-    def __init__(self, ip, loop):
+    def __init__(self, ip):
         self.ip = ip
-        self.loop = loop
         self.transport = None
         self.src_mac = None
         self.src_ip = None
@@ -125,7 +123,7 @@ class ARPRequestProtocol(asyncio.Protocol):
             return self.src_mac
         else:
             sock = self.transport._sock
-            interface = pack('256s', self.loop._interface.encode('ascii'))
+            interface = pack('256s', sock.getsockname()[0].encode('ascii'))
             info = fcntl.ioctl(sock.fileno(), SIOCSIFHWADDR, interface)
             self.src_mac = macaddress.MACAddress(info[18:24])
             return self.src_mac
@@ -138,7 +136,7 @@ class ARPRequestProtocol(asyncio.Protocol):
             return self.src_ip
         else:
             sock = self.transport._sock
-            interface = pack('256s', self.loop._interface.encode('ascii'))
+            interface = pack('256s', sock.getsockname()[0].encode('ascii'))
             info = fcntl.ioctl(sock.fileno(), SIOCGIFADDR, interface)
             self.src_ip = ipaddress.IPv4Address(info[20:24])
             return self.src_ip
@@ -158,7 +156,7 @@ class ARPRequestProtocol(asyncio.Protocol):
 def main():
     event_loop = asyncio.get_event_loop()
     coro = create_raw_connection(
-        lambda: ARPRequestProtocol(ip='192.168.1.64', loop=event_loop),
+        lambda: ARPRequestProtocol(ip='192.168.1.64'),
         loop=event_loop,
         interface='eth0')
     server_transport, server_proto = event_loop.run_until_complete(coro)
