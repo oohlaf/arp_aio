@@ -12,6 +12,7 @@ from struct import pack, unpack
 import macaddress
 
 from packet import Ethernet, ARP, ETHERTYPE
+from util import drop_privileges
 
 
 logging.basicConfig(
@@ -37,10 +38,12 @@ def create_raw_connection(protocol_factory, loop,
         proto = socket.htons(proto)
 
     exceptions = []
+    sock = None
     try:
         sock = socket.socket(family=family,
                              type=socket.SOCK_RAW,
                              proto=proto)
+        drop_privileges()
         sock.setblocking(False)
         try:
             sock.bind((interface, socket.SOCK_RAW))
@@ -70,7 +73,6 @@ def create_raw_connection(protocol_factory, loop,
 
     transport, protocol = yield from loop._create_connection_transport(
         sock, protocol_factory, ssl=None, server_hostname=None)
-
     return transport, protocol
 
 
